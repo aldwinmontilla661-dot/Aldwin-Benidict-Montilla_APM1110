@@ -1,0 +1,696 @@
+---
+title: "FA9"
+author: "Aldwin Benidict Montilla"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# PART 1: STOCHASTIC INDEPENDENCE
+
+
+### Dataset Description or Simulation Design
+
+This analysis uses **simulated data** generated in R with its random number
+generation functions.
+
+Variables for Stochastic Independence
+
+Two discrete random variables, X and Y, were simulated. The settings are
+summarized in Table 1.
+
+**Table 1. Simulation design for Part 1**
+
+| Variable | Distribution | Parameters | Meaning |
+|----------|--------------|------------|---------|
+| X | Binomial | size = 5, p = 0.5 | Number of heads in 5 fair coin flips |
+| Y | Binomial | size = 4, p = 0.3 | Number of successes in 4 independent trials, each with probability 0.3 |
+
+- **Sample size:** n = 10,000 observations of each variable.
+- **Reproducibility:** `set.seed(2026)` was set before generating the data,
+  so the results can be reproduced exactly.
+- **Independence by design:** X and Y were generated in two separate calls to
+  `rbinom()`. Neither call uses the other's values, so the two variables are
+  independent by construction. The analysis checks whether the simulated data
+  agree with this, using the factorization criterion
+  p(x, y) = pX(x) pY(y).
+- **Possible values:** X takes the values 0, 1, ..., 5 and Y takes the values
+  0, 1, ..., 4, so the joint distribution has 6 x 5 = 30 cells.
+
+### (a) Describe the two random variables and explain how they are measured or generated.
+
+```{r part_1a}
+# Load the tidyverse (includes ggplot2 and tibble)
+library(tidyverse)
+
+# ---- Generate the two random variables ----
+set.seed(2026)          # makes the random numbers reproducible
+n <- 10000              # number of simulated observations
+
+# X = number of heads in 5 fair coin flips 
+X <- rbinom(n, size = 5, prob = 0.5)
+
+# Y = number of successes in 4 trials with p = 0.3 
+# It is generated in a SEPARATE call, so it has no link to X
+Y <- rbinom(n, size = 4, prob = 0.3)
+```
+
+```{r joint-table}
+# Put them side by side in one data frame (tibble)
+dat <- tibble(X = X, Y = Y)
+
+knitr::kable(head(dat),
+             caption = "Table 2")
+
+```
+
+Answer for (a): X is the number of heads in 5 fair coin flips, so X ~ Binomial(5, 0.5). Y is the number of successes in 4 independent trials with success probability 0.3, so Y ~ Binomial(4, 0.3). Both were generated with `rbinom()`, in two separate calls, using n = 10,000 observations each. Because neither call uses the other's output, any link between X and Y would have to arise by chance alone. Both variables are discrete counts.
+
+
+### (b) Examine the relationship between the two variables using an appropriate numerical or graphical approach.
+
+
+```{r part_1b}
+# Counts of every (x, y) combination = raw joint distribution
+joint_counts <- table(X = dat$X, Y = dat$Y)
+```
+
+```{r joint_counts}
+
+
+knitr::kable(joint_counts,
+             caption = "Table 3")
+```
+
+```{r part_1b2}
+# Correlation: values near 0 suggest no linear relationship
+cor(dat$X, dat$Y)
+
+# Heatmap of the joint PMF
+# as.data.frame() converts the table into a long format for ggplot
+joint_pmf <- prop.table(joint_counts)   # counts -> proportions
+heat_df <- as.data.frame(joint_pmf)
+names(heat_df) <- c("X", "Y", "Probability")
+
+ggplot(heat_df, aes(x = X, y = Y, fill = Probability)) +
+  geom_tile() +                                         # colored squares
+  geom_text(aes(label = round(Probability, 3))) +       # print values in squares
+  labs(title = "Estimated Joint PMF of X and Y",
+       x = "X (Binomial(5, 0.5))", y = "Y (Binomial(4, 0.3))") +
+  theme_minimal()
+```
+
+Answer (b):
+The table show the counts of every (x, y) combination across the 10,000
+observations. The most frequent pairs occur at X = 2 or 3 with Y = 1, the most likely values of each variable on its own. Pairs where both variables are extreme, such as X = 0 with Y = 4, are very rare.
+
+The sample correlation between X and Y is 0.000921766, which is essentially zero. There is no linear relationship between the two variables.
+
+The heatmap figure shows a single symmetric peak around X = 2 to 3 and Y = 1, with probabilities falling off evenly in every direction. There is no tilt or diagonal pattern, so larger values of X do not go with larger or smaller values of Y. This is consistent with independence.
+
+Correlation only measures linear association, and a heatmap is a visual
+impression, so neither is proof of independence.
+
+### (c) Evaluate whether the two variables can reasonably be considered independent. For discrete variables, examine the joint probability mass function and marginal probability mass functions. For continuous variables, examine the joint distribution and the corresponding marginal distributions.
+
+```{r part_1c}
+# Marginal PMF of X: add up across the columns (sum over Y)
+pX <- rowSums(joint_pmf)
+# Marginal PMF of Y: add up down the rows (sum over X)
+pY <- colSums(joint_pmf)
+
+pX
+pY
+
+# What independence PREDICTS: pX(x) * pY(y) for every cell
+product_pmf <- outer(pX, pY)
+```
+
+```{r comparison}
+# Compare observed joint vs. product of marginals, cell by cell
+comparison <- as.data.frame(joint_pmf)
+names(comparison) <- c("X", "Y", "Joint")
+comparison$Product    <- as.vector(product_pmf)   # same cell order as above
+comparison$Difference <- comparison$Joint - comparison$Product
+
+
+knitr::kable(comparison,
+             caption = "Table 4")
+```
+Answer (c):
+The marginal PMFs were obtained by summing the joint PMF over the other variable. They agree closely with the theoretical Binomial distributions: for example, the estimated P(Y = 1) is 0.4090 against a theoretical value of 0.4116, and the estimated P(X = 2) is 0.3158 against 0.3125.
+
+If X and Y are independent, each joint probability should equal the product of its marginals. The table compares the observed joint PMF with pX(x) pY(y) for all 30 cells. The differences are small, with the largest absolute difference equal to 0.00358. They are also a mix of positive and negative values with no systematic pattern, which is what sampling variation produces with 10,000 observations. The data therefore give no evidence of dependence, and X and Y can reasonably be **considered independent.**
+
+### (d) Discuss your findings in relation to the factorization criterion for independence. For discrete variables, use the corresponding probability mass function. 
+
+
+```{r part_1d}
+# Largest gap between joint and product (should be tiny if independent)
+max(abs(comparison$Difference))
+
+# Formal test. H0: X and Y are independent.
+# simulate.p.value avoids warnings when some cells have small counts
+chisq_res <- chisq.test(joint_counts, simulate.p.value = TRUE, B = 5000)
+chisq_res
+
+# ---- Optional contrast: a DEPENDENT pair (X and Z = X + Y) ----
+Z <- X + Y
+joint_xz <- prop.table(table(X, Z))
+prod_xz  <- outer(rowSums(joint_xz), colSums(joint_xz))
+
+# Example cell: X = 5 and Z = 0 is IMPOSSIBLE (Z >= X always),
+# but the product of marginals says it is possible
+joint_xz["5", "0"]   # joint probability (will be 0)
+prod_xz["5", "0"]    # product of marginals (will be > 0)
+```
+
+
+Answer (d): The factorization criterion states that X and Y are independent if and only if p(x, y) = pX(x) pY(y) for every pair (x, y). In the simulated data, the largest absolute difference between the joint probability and the product of marginals across all 30 cells is 0.00357638, which is small and consistent with sampling variation.
+
+A chi-square test of independence (H0: X and Y are independent) gave X-squared = 23.311 with a simulated p-value of 0.2859. Since the p-value is greater than 0.05, we fail to reject H0. The data provide no evidence against independence, so the factorization p(x, y) = pX(x) pY(y) holds approximately in all cells.
+
+For contrast, consider X and Z = X + Y. The pair (X = 5, Z = 0) is impossible, so p(5, 0) = 0, yet pX(5) pZ(0) = 0.00019899. The joint does not equal the product, so the factorization fails and X and Z are dependent. One failing cell is enough to break the criterion.
+
+### **Conclusion for Part 1:** X and Y can reasonably be considered independent.
+
+# PART 2: Sums of Independent Random Variables
+
+### (a) Specify the probability distributions of X and Y, including their parameters.
+
+### (b) Generate at least 5,000 observations from each distribution using R, ensuring that the variables are generated independently.
+
+Code for the part a and part b
+
+```{r part_2ab}
+library(tidyverse)      # ggplot2, tibble, etc.
+
+set.seed(2027)          # reproducibility (a new seed for this part)
+n <- 10000              # number of observations (at least 5,000 required)
+
+# X ~ Normal(mean = 50, sd = 10)  -> Var(X) = 10^2 = 100
+X <- rnorm(n, mean = 50, sd = 10)
+
+# Y ~ Normal(mean = 30, sd = 5)   -> Var(Y) = 5^2 = 25
+# Separate rnorm() call, so Y is generated independently of X
+Y <- rnorm(n, mean = 30, sd = 5)
+```
+
+
+### (c) Construct the random variable: S = X + Y. Examine the distribution of S using an appropriate histogram or probability distribution plot.
+
+
+```{r part_2c}
+S <- X + Y                                  # add row by row
+
+sum_dat <- tibble(X = X, Y = Y, S = S)      # keep everything in one table
+                            
+knitr::kable(head(sum_dat),
+             caption = "Table 5")
+```
+
+```{r part_2c2}
+cor(X, Y)                                   # should be close to 0
+
+# Histogram of S (scaled to density) with the theoretical curve on top
+ggplot(sum_dat, aes(x = S)) +
+  geom_histogram(aes(y = after_stat(density)),   # bar heights as density
+                 bins = 40, fill = "steelblue", color = "white") +
+  stat_function(fun = dnorm,                     # theoretical N(80, 125) density
+                args = list(mean = 80, sd = sqrt(125)),
+                color = "red", linewidth = 1) +
+  labs(title = "Distribution of S = X + Y",
+       subtitle = "Histogram of simulated S with theoretical Normal(80, 125) curve in red",
+       x = "S", y = "Density") +
+  theme_minimal()
+```
+
+Answer (c): The variable S was constructed by adding the simulated values of X and Y row by row. The first six rows confirm that S = X + Y in each case. The sample correlation between X and Y is 0.0006399292, which is essentially zero, consistent with generating the two variables independently.
+
+The histogram figure shows a histogram of the 10,000 simulated values of S, scaled to density, with the theoretical Normal(80, 125) density in red. The histogram is symmetric and bell-shaped, centered near 80, and it follows the red curve closely across the whole range, including the tails. This agrees with Proposition 3.2: the sum of independent normal random variables is normal, with mean equal to the sum of the means (50 + 30 = 80) and variance equal to the sum of the variances (100 + 25 = 125). The small deviations of individual bars from the curve are due to sampling variation.
+
+### (d) Calculate and compare the theoretical and simulated expected values and variances of S. Explain whether the results support the properties of sums of independent random variables. 
+
+```{r part_2d}
+# Theoretical values from the properties of sums of independent variables
+theo_mean <- 50 + 30            # E[S] = E[X] + E[Y]
+theo_var  <- 10^2 + 5^2         # Var(S) = Var(X) + Var(Y)
+
+# Simulated values from the 10,000 observations of S
+sim_mean <- mean(S)
+sim_var  <- var(S)
+
+sim_mean
+sim_var
+```
+
+```{r part_2d2}
+# Side-by-side comparison table
+compare_S <- tibble(
+  Quantity    = c("E[S]", "Var(S)"),
+  Theoretical = c(theo_mean, theo_var),
+  Simulated   = c(sim_mean, sim_var),
+  Difference  = Simulated - Theoretical
+)
+
+knitr::kable(compare_S,
+             caption = "Table 6")
+```
+
+```{r part_2d3}
+# Extra check: the covariance term. For ANY X and Y,
+# Var(X + Y) = Var(X) + Var(Y) + 2*Cov(X, Y).
+# Independence makes Cov(X, Y) about 0, so the extra term vanishes.
+cov(X, Y)
+var(X) + var(Y) + 2 * cov(X, Y)   # equals var(S) exactly
+```
+
+Answer (d): For independent random variables, E[S] = E[X] + E[Y] and Var(S) = Var(X) + Var(Y). With X ~ Normal(50, 10) and Y ~ Normal(30, 5), the theoretical values are E[S] = 50 + 30 = 80 and Var(S) = 10^2 + 5^2 = 125.
+
+The table compares these with the values from the 10,000 simulated observations. The simulated mean is 79.92202, a difference of -0.07797982 from the theoretical value. This is about 0.7 standard errors, which is well within sampling variation. The simulated variance is 128.03452 against the theoretical 125, a difference of 3.03452448 (about 2.4%). For normal data the standard error of a sample variance is roughly 1.77, so this gap is 1.72 standard errors and is consistent with sampling variability.
+
+The sample covariance of X and Y is 0.03249984, close to zero relative to the variances, and Var(X) + Var(Y) + 2 Cov(X, Y) = 128.0345 reproduces the simulated variance of S exactly. Because independence makes the covariance term vanish in theory, the variance of the sum is the sum of the variances.
+
+These results support the properties of sums of independent random variables: the expected value of the sum is the sum of the expected values, and the variance of the sum is the sum of the variances. The small differences between theory and simulation are due to random sampling and would shrink as n increases.
+
+
+# PART 3: Conditional Distributions - Discrete Case
+
+Here, we are using a simulated discrete data for part 3. 
+
+
+```{r part_3}
+library(tidyverse)
+
+# ---- Simulate the data ----
+set.seed(2028)                 # new seed for this part
+n <- 10000                     # number of students
+
+# Y = number of review sessions attended out of 3 
+Y <- rbinom(n, size = 3, prob = 0.5)
+
+# X = quiz score out of 5. Its success probability DEPENDS on Y:
+# p = 0.2 + 0.2*Y  ->  Y=0: 0.2, Y=1: 0.4, Y=2: 0.6, Y=3: 0.8
+# So given Y = y, X ~ Binomial(5, 0.2 + 0.2*y)
+p_x <- 0.2 + 0.2 * Y
+X <- rbinom(n, size = 5, prob = p_x)   # prob can be a vector (one per student)
+
+dat3 <- tibble(X = X, Y = Y)
+
+
+knitr::kable(head(dat3),
+             caption = "Table 7")
+```
+
+Variables for the Discrete Conditional Distribution
+
+**Table 8. Simulation design for Part 3**
+
+| Variable | Distribution | Meaning |
+|----------|--------------|---------|
+| Y | Binomial(3, 0.5) | Number of review sessions attended (0 to 3) |
+| X given Y = y | Binomial(5, 0.2 + 0.2y) | Quiz score out of 5, with success probability rising with y |
+
+- **Sample size:** n = 10,000 students. **Seed:** `set.seed(2028)`.
+- **Dependence by design:** the success probability of X is a function of Y,
+  so X and Y are dependent. Y is drawn first, then X is drawn using each
+  student's own Y.
+
+
+### (a) Construct the joint probability distribution of X and Y.
+
+```{r part_3a}
+joint_counts3 <- table(X = dat3$X, Y = dat3$Y)   # counts of each (x, y) pair
+
+
+knitr::kable(joint_counts3,
+             caption = "Table 9")
+```
+
+```{r part_3a2}
+joint_pmf3 <- prop.table(joint_counts3)          # counts -> proportions
+                            # estimated p(x, y)
+
+knitr::kable(round(joint_pmf3, 4),
+             caption = "Table 10")
+
+sum(joint_pmf3)                                  # must equal 1
+```
+
+Answer (a): The joint PMF p(x, y) = P(X = x, Y = y) was estimated by counting how many of the 10,000 simulated students had each combination of quiz score x and number of review sessions y (Table 9), then dividing each count by n (Table 10). The entries are non-negative and sum to 1, so this is a valid joint distribution.
+
+The probability is concentrated along a diagonal band. The largest cells are (X = 3, Y = 2) at 0.1309 and (X = 2, Y = 1) at  0.1221, while cells such as (X = 5, Y = 0) at 10^{-4} are nearly empty. Higher X values go with higher Y values. Unlike Part 1, where the joint PMF was a symmetric hill, this tilted pattern suggests that X and Y are dependent, which parts (c) and (d) examine through conditional distributions.
+
+### (b) Obtain the marginal probability distributions of X and Y
+
+```{r part_3b}
+pX3 <- rowSums(joint_pmf3)     # P(X = x): sum across Y (rows)
+pY3 <- colSums(joint_pmf3)     # P(Y = y): sum across X (columns)
+
+
+knitr::kable(round(pX3, 4),
+             caption = "Table 11")
+knitr::kable(round(pY3, 4),
+             caption = "Table 12")
+
+# Theoretical marginal of Y is Binomial(3, 0.5), for comparison
+round(dbinom(0:3, size = 3, prob = 0.5), 4)
+```
+
+Answer (b): The marginal PMF's were obtained by summing the joint PMF over the other variable: pX(x) over y (row sums) and pY(y) over x (column sums). Table 12 shows both, and each sums to 1.
+
+The marginal of Y closely matches its theoretical Binomial(3, 0.5) distribution. For example, the estimated P(Y = 2) is 0.3816 against a theoretical 0.375. The marginal of X is roughly symmetric and centered near 2.5, with its largest probabilities at X = 2 and X = 3.
+
+
+### (c) Calculate the conditional probability of X given a particular value of Y = y.
+
+```{r part_3c}
+# One value first: Y = 2
+# p(x | Y = 2) = p(x, 2) / pY(2)
+cond_Y2 <- joint_pmf3[, "2"] / pY3["2"]
+round(cond_Y2, 4)
+sum(cond_Y2)                   # a PMF must sum to 1
+
+# All conditionals at once: divide each column by its own column total
+# margin = 2 means "work column by column"
+cond_X_given_Y <- prop.table(joint_pmf3, margin = 2)
+
+
+knitr::kable(round(cond_X_given_Y, 4),
+             caption = "Table 13")
+
+knitr::kable(colSums(cond_X_given_Y),      # every column should sum to 1
+             caption = "Table 14")
+
+# Compare simulated vs theoretical conditional (Y = 2), plus the marginal of X
+compare_cond <- tibble(
+  x                = 0:5,
+  Conditional_sim  = as.vector(cond_Y2),
+  Theoretical      = dbinom(0:5, size = 5, prob = 0.6),  # Binomial(5, 0.2+0.2*2)
+  Marginal_X       = as.vector(pX3)
+)
+
+
+
+
+# Plot: conditional PMFs of X for each value of Y, side by side
+cond_df <- as.data.frame(cond_X_given_Y)         # columns: X, Y, Freq
+names(cond_df) <- c("X", "Y", "Probability")
+
+ggplot(cond_df, aes(x = X, y = Probability, fill = Y)) +
+  geom_col(position = "dodge") +                 # bars side by side
+  labs(title = "Conditional distribution of X given Y = y",
+       x = "X (quiz score)", y = "P(X = x | Y = y)",
+       fill = "Y (sessions)") +
+  theme_minimal()
+```
+
+
+Answer (c): The conditional PMF of X given Y = y was computed as pX|Y(x | y) = p(x, y) / pY(y), that is, by dividing each column of the joint PMF by its column total. For example, given Y = 2, pX|Y(3 | 2) = p(3, 2) / pY(2) = `r round(joint_pmf3["3", "2"], 4)` / `r round(pY3["2"], 4)` = `r round(cond_Y2["3"], 4)`.
+
+Table 13 gives the conditional PMF of X for every value of Y. Each column sums to 1 (the column sums are `r paste(colSums(cond_X_given_Y), collapse = ", ")`), so each is a valid probability distribution. For Y = 2, the conditional probabilities for x = 0, 1, 2, 3, 4, 5 are `r paste(round(cond_Y2, 4), collapse = ", ")`.
+
+Table 14 compares these with the theoretical conditional distribution, Binomial(5, 0.6), whose probabilities are `r paste(round(dbinom(0:5, 5, 0.6), 4), collapse = ", ")`. The simulated and theoretical values agree closely. The largest absolute difference is `r round(max(abs(compare_cond$Conditional_sim - compare_cond$Theoretical)), 4)`, which is within sampling variation.
+
+The figure plots the conditional PMFs for Y = 0, 1, 2 and 3 side by side. The most likely score is X = `r names(which.max(cond_X_given_Y[, "0"]))` when Y = 0 (probability `r round(max(cond_X_given_Y[, "0"]), 4)`), X = `r names(which.max(cond_X_given_Y[, "1"]))` when Y = 1 (`r round(max(cond_X_given_Y[, "1"]), 4)`), X = `r names(which.max(cond_X_given_Y[, "2"]))` when Y = 2 (`r round(max(cond_X_given_Y[, "2"]), 4)`) and X = `r names(which.max(cond_X_given_Y[, "3"]))` when Y = 3 (`r round(max(cond_X_given_Y[, "3"]), 4)`).
+
+### (d) Interpret the conditional distribution and explain how the distribution of X changes, or remains unchanged, when conditioned on Y = y.
+```{r part_3d}
+
+x_vals <- as.numeric(rownames(cond_X_given_Y))   # 0, 1, ..., 5
+
+# Conditional mean E[X | Y = y] for each y (apply over columns)
+cond_means <- apply(cond_X_given_Y, 2, function(p) sum(x_vals * p))
+
+# Unconditional mean E[X]
+mean_X <- sum(x_vals * pX3)
+
+means_table <- tibble(
+  Y           = 0:3,
+  Simulated   = as.vector(cond_means),
+  Theoretical = 5 * (0.2 + 0.2 * (0:3))          # E[Binomial(5,p)] = 5p
+)
+
+knitr::kable(means_table,     
+             caption = "Table 16")
+
+mean_X                                           # overall mean of X
+
+```
+
+Answer (d): ### (d) Interpretation
+
+If X and Y were independent, conditioning on Y = y would leave the
+distribution of X unchanged, so pX|Y(x | y) = pX(x) for every y. Here the
+conditional distribution clearly changes with y.
+
+For example, given Y = 2, the probability of a score of 3 is
+`r round(cond_Y2["3"], 4)`, compared with `r round(pX3["3"], 4)` in the
+marginal distribution. A score of 0 has probability `r round(cond_Y2["0"], 4)`
+given Y = 2, compared with `r round(pX3["0"], 4)` in the marginal.
+Students who attended more review sessions are much less likely to get very
+low scores.
+
+Table 16 shows the conditional mean of X for each value of Y. The simulated
+conditional means are
+`r paste(round(means_table$Simulated, 3), collapse = ", ")` for
+Y = 0, 1, 2, 3, against theoretical values of
+`r paste(means_table$Theoretical, collapse = ", ")`. The largest difference is
+`r round(max(abs(means_table$Simulated - means_table$Theoretical)), 3)`,
+which is within sampling variation. The overall mean of X is
+`r round(mean_X, 4)`, so the conditional means move from well below this
+value (when Y = 0) to well above it (when Y = 3). The distribution of X
+shifts upward by about one point for each additional review session, as
+Figure 3 also shows.
+
+Because pX|Y(x | y) differs from pX(x), the factorization
+p(x, y) = pX(x) pY(y) fails, and X and Y are dependent. Knowing Y gives
+information about X. This is the opposite of Part 1, where the conditional
+distributions would have matched the marginal.
+
+
+# PART 4: Conditional Distributions - Continuous Case
+
+We will use a simulated continuous data.
+
+```{r part_4}
+# Load MASS for multivariate normal simulation (mvrnorm) and dplyr for clean summaries
+library(MASS)
+library(dplyr)
+
+# Set a seed so the random numbers are identical every time the script runs
+set.seed(1110)
+
+# Choose the number of continuous observations to generate
+n_obs <- 5000
+
+# Define distribution parameters for continuous variables X and Y
+mu_x <- 50      # Mean of X
+mu_y <- 100     # Mean of Y
+sd_x <- 10      # Standard deviation of X
+sd_y <- 15      # Standard deviation of Y
+rho  <- 0.65    # Correlation between X and Y (-1 to 1)
+
+# Compute covariance between X and Y using Cov(X, Y) = rho * sd_x * sd_y
+cov_xy <- rho * sd_x * sd_y
+
+# Build the 2x2 covariance matrix required by mvrnorm()
+sigma_mat <- matrix(
+  c(sd_x^2, cov_xy,
+    cov_xy, sd_y^2),
+  nrow = 2,
+  byrow = TRUE
+)
+
+# Generate n_obs pairs of (X, Y) from the bivariate normal distribution
+sim_mat <- mvrnorm(n = n_obs, mu = c(mu_x, mu_y), Sigma = sigma_mat)
+
+# Store X and Y in a data frame so each row stays paired
+cont_df <- data.frame(
+  X = sim_mat[, 1],
+  Y = sim_mat[, 2]
+)
+
+# Compute summary statistics (mean, SD, min, median, max) for both variables
+summary_stats <- cont_df %>%
+  summarise(
+    mean_X = mean(X),
+    sd_X   = sd(X),
+    min_X  = min(X),
+    med_X  = median(X),
+    max_X  = max(X),
+    mean_Y = mean(Y),
+    sd_Y   = sd(Y),
+    min_Y  = min(Y),
+    med_Y  = median(Y),
+    max_Y  = max(Y),
+    emp_cor = cor(X, Y)
+  )
+
+# Print the summary statistics table
+print(summary_stats)
+
+```
+
+Answer (a): Two jointly continuous random variables, X and Y, were generated using a bivariate normal distribution with a sample of size of n = 5000 paired observations (set.seed(1110)):
+
+Random Variable X: Simulated from a normal distribution with theoretical mean mu(sub X) = 50 and standard deviation sigma(sub X) = 10. The observed sample yields a mean of 50.02 (median = 50.10), a standard deviation of 9.86, and values ranging from 10.35 to 89.12.
+
+Random Variable Y: Simulated from a normal distribution with theoretical mean mu(sub Y) = 100 and standard deviation sigma(sub Y) = 15. The observed sample yields a mean of 100.07 (median = 100.30), a standard deviation of 14.71, and values ranging from 32.93 to 150.90.
+
+### (b) Estimate or obtain their marginal distributions and examine their joint distribution using appropriate graphical representations. 
+
+
+```{r part_4b}
+# --- Part 4(b): Marginal distributions and joint distribution plots ---
+plot_marg_X <- ggplot(cont_df, aes(x = X)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 35,
+                 fill = "steelblue", color = "white", alpha = 0.65) +
+  geom_density(color = "navy", linewidth = 1) +
+  stat_function(fun = dnorm, args = list(mean = mu_x, sd = sd_x),
+                color = "red", linetype = "dashed", linewidth = 1) +
+  labs(
+    title = "Marginal Distribution of X",
+    subtitle = "Empirical Density vs. Theoretical N(50, 10^2)",
+    x = "X",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+plot_marg_Y <- ggplot(cont_df, aes(x = Y)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 35,
+                 fill = "darkseagreen3", color = "white", alpha = 0.65) +
+  geom_density(color = "darkgreen", linewidth = 1) +
+  stat_function(fun = dnorm, args = list(mean = mu_y, sd = sd_y),
+                color = "red", linetype = "dashed", linewidth = 1) +
+  labs(
+    title = "Marginal Distribution of Y",
+    subtitle = "Empirical Density vs. Theoretical N(100, 15^2)",
+    x = "Y",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+plot_joint_XY <- ggplot(cont_df, aes(x = X, y = Y)) +
+  geom_point(alpha = 0.25, color = "gray35", size = 1) +
+  geom_density_2d(color = "firebrick", linewidth = 0.8) +
+  labs(
+    title = "Joint Distribution of X and Y",
+    subtitle = "Scatter Plot with 2D Density Contours",
+    x = "X",
+    y = "Y"
+  ) +
+  theme_minimal()
+
+print(plot_marg_X)
+print(plot_marg_Y)
+print(plot_joint_XY)
+```
+
+Answer (b): The marginal and joint plots visually confirm both the individual behavior of X and Y and their joint dependence structure:
+
+Marginal Distribution of X: The scaled histogram and empirical kernel density curve (solid navy line) are symmetric, unimodal, and bell-shaped, centered right around a mean of 50 with a peak density near 0.04. The empirical curve aligns closely with the dashed red theoretical normal density curve (mean = 50, variance = 100) across its entire range.
+
+Marginal Distribution of Y: Similarly, the empirical histogram and green density curve for Y follow a symmetric bell shape centered near a mean of 100 with a peak density around 0.027, matching the dashed red theoretical normal density curve (mean = 100, variance = 225). Because Y has a larger standard deviation (SD of Y = 15 vs. SD of X = 10), its marginal distribution is wider and shorter than X's.
+
+Joint Distribution of (X, Y): The scatter plot with overlaid 2D density contours shows an upward-sloping elliptical cloud centered near (50, 100). Rather than forming axis-aligned circles (which would occur if the correlation were 0), the concentric red contours tilt diagonally from bottom-left to top-right, demonstrating a positive linear relationship where higher values of Y tend to pair with higher values of X.
+
+
+
+### (c) Obtain an empirical conditional distribution of X given a selected value or interval of Y. Use an appropriate visualization, such as a conditional density plot, histogram, or density curve
+
+```{r part_4c}
+# --- Part 4(c): Empirical conditional distribution of X given Y near y_0 ---
+# Because P(Y = y_0) = 0 for continuous Y, condition on a narrow band |Y - y_0| <= eps
+y_target <- 115
+eps      <- 2.5
+
+cond_df <- cont_df %>%
+  filter(abs(Y - y_target) <= eps)
+
+# Theoretical conditional normal parameters for X | Y = y_target (bivariate normal)
+theo_cond_mean <- mu_x + rho * (sd_x / sd_y) * (y_target - mu_y)
+theo_cond_sd   <- sqrt(sd_x^2 * (1 - rho^2))
+
+emp_cond_mean <- mean(cond_df$X)
+emp_cond_sd   <- sd(cond_df$X)
+
+cat("Conditional sample size n_cond:", nrow(cond_df), "\n")
+cat("Empirical E[X | Y near", y_target, "]:", round(emp_cond_mean, 4),
+    "| Theoretical E[X | Y =", y_target, "]:", round(theo_cond_mean, 4), "\n")
+cat("Empirical SD(X | Y near", y_target, "):", round(emp_cond_sd, 4),
+    "| Theoretical SD(X | Y =", y_target, "):", round(theo_cond_sd, 4), "\n")
+
+plot_cond_X <- ggplot(cond_df, aes(x = X)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 25,
+                 fill = "coral", color = "white", alpha = 0.65) +
+  geom_density(aes(color = "Conditional X | Y near 115"), linewidth = 1) +
+  geom_density(data = cont_df, aes(x = X, color = "Marginal X (Unconditional)"),
+               linetype = "dotted", linewidth = 1) +
+  stat_function(fun = dnorm,
+                args = list(mean = theo_cond_mean, sd = theo_cond_sd),
+                aes(color = "Theoretical Conditional N"),
+                linetype = "dashed", linewidth = 1) +
+  scale_color_manual(
+    name = "Distribution",
+    values = c(
+      "Conditional X | Y near 115" = "darkred",
+      "Marginal X (Unconditional)" = "navy",
+      "Theoretical Conditional N" = "black"
+    )
+  ) +
+  labs(
+    title = paste0("Conditional Distribution of X Given Y ≈ ", y_target),
+    subtitle = paste0("Band: |Y - ", y_target, "| <= ", eps, " (n = ", nrow(cond_df), ")"),
+    x = "X",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+print(plot_cond_X)
+```
+
+Answer (c): Because Y is a continuous random variable, the exact event that Y equals 115 has probability zero (P(Y = 115) = 0); therefore, we condition on a narrow neighborhood interval where the absolute difference between Y and 115 is at most 2.5 (that is, Y is between 112.5 and 117.5 inclusive), yielding a conditional subsample of n = 404 observations.
+
+Empirical vs. Theoretical Conditional Moments: Within this conditioned slice, the empirical conditional mean of X is 55.9227, closely matching the theoretical bivariate normal conditional expectation E[X | Y = 115] = 50 + 0.65 * (10 / 15) * (115 - 100) = 56.5. The empirical conditional standard deviation is 7.8552, aligning closely with the theoretical conditional standard deviation of 10 * sqrt(1 - 0.65^2) = 7.5993.
+
+Visual Comparison: In the conditional density plot, the coral histogram and empirical conditional density curve (solid dark red) remain approximately normal and track the theoretical conditional density curve (dashed black). Compared to the unconditional marginal density of X (dotted blue curve centered at 50), the conditioned distribution shifts noticeably to the right and becomes taller and narrower around 56.5.
+
+# (d) Interpret the results and explain how conditioning on Y affects the distribution of x. Relate your findings to the conditional density function: 
+
+```{r part_4d}
+# --- Part 4(d): Supporting numerical check for conditioning effect ---
+# Compare conditional means across low, medium, and high Y intervals
+band_compare <- cont_df %>%
+  mutate(
+    y_band = cut(
+      Y,
+      breaks = c(-Inf, 85, 115, Inf),
+      labels = c("Low Y (<= 85)", "Mid Y (85 to 115)", "High Y (> 115)")
+    )
+  ) %>%
+  group_by(y_band) %>%
+  summarise(
+    n_in_band  = n(),
+    cond_mean_X = mean(X),
+    cond_sd_X   = sd(X),
+    .groups = "drop"
+  )
+print(band_compare)
+```
+
+Answer (d): Conditioning on Y alters both the location (center) and spread (variability) of the distribution of X, demonstrating that X and Y are stochastically dependent:
+
+Shift in Conditional Location: Across the three intervals of Y, the conditional mean of X increases systematically from 39.9 when Y is less than or equal to 85 (n = 776), to 50.1 when Y is between 85 and 115 (n = 3,451), and up to 59.8 when Y is greater than 115 (n = 773). Consistent with the bivariate normal conditional expectation E[X | Y = y] = mu_X + rho * (sigma_X / sigma_Y) * (y - mu_Y), knowing that Y takes a larger value shifts the conditional density of X upward because the correlation rho = 0.65 is positive.
+
+Reduction in Conditional Spread: Once Y is known within a band, the uncertainty in X decreases noticeably. The conditional standard deviations within the three Y intervals (7.93, 8.30, and 7.75)—and especially within the narrow slice where the absolute difference between Y and 115 is at most 2.5 (SD = 7.86)—are consistently smaller than the unconditional standard deviation of X (9.86), aligning with the theoretical conditional standard deviation formula sigma_X * sqrt(1 - rho^2) = 7.60.
+
+Connection to the Conditional Density Function: By definition, the conditional probability density function of X given Y = y is f(x | y) = f(x, y) / f_Y(y) for f_Y(y) > 0. Geometrically, evaluating f(x | y) takes a vertical cross-section of the joint density surface f(x, y) at Y = y and normalizes it by the marginal density f_Y(y) so that the slice integrates to 1. If X and Y were independent, the joint density would factor as f(x, y) = f_X(x) * f_Y(y), causing f(x | y) = [f_X(x) * f_Y(y)] / f_Y(y) = f_X(x) to remain completely unchanged regardless of y. Because f(x | y) shifts in mean and narrows in variance as y changes, the joint density does not factor into the product of its marginals, confirming that X and Y are dependent.
